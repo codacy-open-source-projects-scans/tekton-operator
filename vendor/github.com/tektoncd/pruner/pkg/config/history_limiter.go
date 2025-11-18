@@ -25,7 +25,8 @@ import (
 	"strconv"
 	"time"
 
-	// tektonprunerv1alpha1 "github.com/openshift-pipelines/tektoncd-pruner/pkg/apis/tektonpruner/v1alpha1"
+	"github.com/tektoncd/pruner/pkg/metrics"
+	// tektonprunerv1alpha1 "github.com/tektoncd/pruner/pkg/apis/tektonpruner/v1alpha1"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -65,7 +66,7 @@ func NewHistoryLimiter(resourceFn HistoryLimiterResourceFuncs) (*HistoryLimiter,
 		resourceFn: resourceFn,
 	}
 	if hl.resourceFn == nil {
-		return nil, fmt.Errorf("resourceFunc interface can not be nil")
+		return nil, fmt.Errorf("resourceFunc interface cannot be nil")
 	}
 
 	return hl, nil
@@ -149,14 +150,14 @@ func (hl *HistoryLimiter) markAsProcessed(ctx context.Context, resource metav1.O
 	// Convert patchData to JSON
 	patchBytes, err := json.Marshal(patchData)
 	if err != nil {
-		logger.Errorw("error marshaling patch data", zap.Error(err))
+		logger.Errorw("Error marshaling patch data", zap.Error(err))
 		return
 	}
 
 	// Apply the patch
 	err = hl.resourceFn.Patch(ctx, resourceLatest.GetNamespace(), resourceLatest.GetName(), patchBytes)
 	if err != nil {
-		logger.Errorw("error patching resource with 'mark as processed' annotation",
+		logger.Errorw("Error patching resource with 'mark as processed' annotation",
 			"resource", hl.resourceFn.Type(), "namespace", resourceLatest.GetNamespace(), "name", resourceLatest.GetName(), zap.Error(err))
 	}
 }
@@ -268,34 +269,44 @@ func (hl *HistoryLimiter) doResourceCleanup(ctx context.Context, resource metav1
 	var resources []metav1.Object
 	var err error
 
-	if enforcedConfigLevel == EnforcedConfigLevelResource {
-		switch identifiedBy {
-		case "identifiedBy_resource_name":
-			label := fmt.Sprintf("%s=%s", labelKey, resourceName)
-			resources, err = hl.resourceFn.List(ctx, resource.GetNamespace(), label)
-		case "identifiedBy_resource_ann":
-			labelSelector := ""
-			for k, v := range resourceAnnotations {
-				if labelSelector != "" {
-					labelSelector += ","
-				}
-				labelSelector += fmt.Sprintf("%s=%s", k, v)
+	// Handle selector-based identification for both resource and namespace enforcement levels
+	switch identifiedBy {
+	case "identifiedBy_resource_name":
+		// Filter by name label (resource-level enforcement)
+		label := fmt.Sprintf("%s=%s", labelKey, resourceName)
+		resources, err = hl.resourceFn.List(ctx, resource.GetNamespace(), label)
+	case "identifiedBy_resource_selector":
+		// Filter by selector labels (namespace-level enforcement with selectors)
+		labelSelector := ""
+		for k, v := range resourceLabels {
+			if labelSelector != "" {
+				labelSelector += ","
 			}
-			resources, err = hl.resourceFn.List(ctx, resource.GetNamespace(), labelSelector)
-		case "identifiedBy_resource_label":
-			labelSelector := ""
-			for k, v := range resourceLabels {
-				if labelSelector != "" {
-					labelSelector += ","
-				}
-				labelSelector += fmt.Sprintf("%s=%s", k, v)
-			}
-			resources, err = hl.resourceFn.List(ctx, resource.GetNamespace(), labelSelector)
-		default:
-			resources, err = hl.resourceFn.List(ctx, resource.GetNamespace(), "")
+			labelSelector += fmt.Sprintf("%s=%s", k, v)
 		}
-	} else {
-		// For namespace or global level, list all resources in namespace
+		resources, err = hl.resourceFn.List(ctx, resource.GetNamespace(), labelSelector)
+	case "identifiedBy_resource_ann":
+		// Filter by annotations (converted to labels for listing)
+		labelSelector := ""
+		for k, v := range resourceAnnotations {
+			if labelSelector != "" {
+				labelSelector += ","
+			}
+			labelSelector += fmt.Sprintf("%s=%s", k, v)
+		}
+		resources, err = hl.resourceFn.List(ctx, resource.GetNamespace(), labelSelector)
+	case "identifiedBy_resource_label":
+		// Filter by all resource labels
+		labelSelector := ""
+		for k, v := range resourceLabels {
+			if labelSelector != "" {
+				labelSelector += ","
+			}
+			labelSelector += fmt.Sprintf("%s=%s", k, v)
+		}
+		resources, err = hl.resourceFn.List(ctx, resource.GetNamespace(), labelSelector)
+	default:
+		// For namespace/global level without selectors, list all resources in namespace
 		resources, err = hl.resourceFn.List(ctx, resource.GetNamespace(), "")
 	}
 
@@ -337,6 +348,12 @@ func (hl *HistoryLimiter) doResourceCleanup(ctx context.Context, resource metav1
 	}
 
 	// Delete selected resources
+	metricsRecorder := metrics.GetRecorder()
+	resourceType := metrics.ResourceTypePipelineRun
+	if hl.resourceFn.Type() == KindTaskRun {
+		resourceType = metrics.ResourceTypeTaskRun
+	}
+
 	for _, res := range selectionForDeletion {
 		logger.Debugw("deleting resource",
 			"resource", hl.resourceFn.Type(),
@@ -344,10 +361,21 @@ func (hl *HistoryLimiter) doResourceCleanup(ctx context.Context, resource metav1
 			"name", res.GetName(),
 			"creationTimestamp", res.GetCreationTimestamp(),
 		)
+
+		// Calculate resource age for metrics
+		var resourceAge time.Duration
+		creationTime := res.GetCreationTimestamp()
+		if !creationTime.IsZero() {
+			resourceAge = time.Since(creationTime.Time)
+		}
+
 		if err := hl.resourceFn.Delete(ctx, res.GetNamespace(), res.GetName()); err != nil {
 			if errors.IsNotFound(err) {
 				continue
 			}
+			// Record deletion error
+			errorType := metrics.ClassifyError(err)
+			metricsRecorder.RecordResourceError(ctx, resourceType, res.GetNamespace(), errorType, "history_deletion_failed")
 			logger.Errorw("error deleting resource",
 				"resource", hl.resourceFn.Type(),
 				"namespace", res.GetNamespace(),
@@ -356,6 +384,9 @@ func (hl *HistoryLimiter) doResourceCleanup(ctx context.Context, resource metav1
 			)
 			return err
 		}
+
+		// Record successful deletion
+		metricsRecorder.RecordResourceDeleted(ctx, resourceType, res.GetNamespace(), metrics.OperationHistory, resourceAge)
 	}
 
 	return nil
