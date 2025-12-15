@@ -24,6 +24,7 @@ import (
 	"strings"
 	"sync"
 
+	hubtypes "github.com/openshift-pipelines/pipelines-as-code/pkg/hub/vars"
 	pacSettings "github.com/openshift-pipelines/pipelines-as-code/pkg/params/settings"
 	"go.uber.org/zap"
 	"knative.dev/pkg/logging"
@@ -57,7 +58,9 @@ func (set *PACSettings) setPACDefaults(logger *zap.SugaredLogger) {
 	// Override the default ArtifactHub URL to use https://artifacthub.io instead of https://artifacthub.io/api/v1
 	if defaultCatalog, ok := defaultPacSettings.HubCatalogs.Load("default"); ok {
 		catalog := defaultCatalog.(pacSettings.HubCatalog)
-		catalog.URL = "https://artifacthub.io"
+		if catalog.Type == hubtypes.ArtifactHubType {
+			catalog.URL = "https://artifacthub.io"
+		}
 		defaultPacSettings.HubCatalogs.Store("default", catalog)
 	}
 
@@ -128,6 +131,7 @@ func ConvertPacStructToConfigMap(settings *pacSettings.Settings) map[string]stri
 					config[fmt.Sprintf("%s-%s-%s", "catalog", catalogData.Index, "id")] = key.(string)
 					config[fmt.Sprintf("%s-%s-%s", "catalog", catalogData.Index, "name")] = catalogData.Name
 					config[fmt.Sprintf("%s-%s-%s", "catalog", catalogData.Index, "url")] = catalogData.URL
+					config[fmt.Sprintf("%s-%s-%s", "catalog", catalogData.Index, "type")] = catalogData.Type
 					return true
 				})
 			}
