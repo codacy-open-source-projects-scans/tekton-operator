@@ -1001,7 +1001,7 @@ github.com/opencontainers/go-digest
 ## explicit; go 1.18
 github.com/opencontainers/image-spec/specs-go
 github.com/opencontainers/image-spec/specs-go/v1
-# github.com/openshift-pipelines/pipelines-as-code v0.39.3
+# github.com/openshift-pipelines/pipelines-as-code v0.40.0
 ## explicit; go 1.24.0
 github.com/openshift-pipelines/pipelines-as-code/pkg/cli
 github.com/openshift-pipelines/pipelines-as-code/pkg/configutil
@@ -1348,7 +1348,7 @@ github.com/tektoncd/pipeline/test/parse
 ## explicit; go 1.24.0
 github.com/tektoncd/plumbing
 github.com/tektoncd/plumbing/scripts
-# github.com/tektoncd/pruner v0.3.3
+# github.com/tektoncd/pruner v0.3.4
 ## explicit; go 1.24.0
 github.com/tektoncd/pruner/pkg/config
 github.com/tektoncd/pruner/pkg/metrics
