@@ -140,6 +140,11 @@ func UpdateResult(ctx context.Context, old *v1alpha1.TektonResult, new *v1alpha1
 		updated = true
 	}
 
+	if !reflect.DeepEqual(old.Spec.Config, new.Spec.Config) {
+		old.Spec.Config = new.Spec.Config
+		updated = true
+	}
+
 	if old.ObjectMeta.OwnerReferences == nil {
 		old.ObjectMeta.OwnerReferences = new.ObjectMeta.OwnerReferences
 		updated = true
@@ -171,7 +176,7 @@ func GetTektonResultCR(config *v1alpha1.TektonConfig, operatorVersion string) *v
 	// For Hub clusters (multicluster enabled AND role is Hub), set replicas to 0
 	// for watcher and retention-policy-agent deployments
 	if !config.Spec.Scheduler.MultiClusterDisabled &&
-		config.Spec.Scheduler.MultiClusterRole == v1alpha1.MultiClusterRoleHub {
+		strings.EqualFold(string(config.Spec.Scheduler.MultiClusterRole), string(v1alpha1.MultiClusterRoleHub)) {
 		result = disableWatcherAndRetentionAgentOnHubCluster(result)
 	}
 
@@ -188,6 +193,7 @@ func GetTektonResultCR(config *v1alpha1.TektonConfig, operatorVersion string) *v
 				TargetNamespace: config.Spec.TargetNamespace,
 			},
 			Result: result,
+			Config: config.Spec.Config,
 		},
 	}
 }
