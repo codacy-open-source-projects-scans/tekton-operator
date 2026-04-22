@@ -4,7 +4,7 @@ go 1.25.5
 
 require (
 	github.com/Masterminds/semver v1.5.0
-	github.com/cert-manager/cert-manager v1.20.1
+	github.com/cert-manager/cert-manager v1.20.2
 	github.com/cli/go-gh/v2 v2.13.0
 	github.com/go-logr/zapr v1.3.0
 	github.com/google/go-cmp v0.7.0
@@ -17,7 +17,7 @@ require (
 	github.com/openshift/apiserver-library-go v0.0.0-20230816171015-6bfafa975bfb
 	github.com/openshift/client-go v0.0.0-20240523113335-452272e0496d
 	github.com/openshift/library-go v0.0.0-20230503173034-95ca3c14e50a
-	github.com/sigstore/cosign/v2 v2.6.2
+	github.com/sigstore/cosign/v2 v2.6.3
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
@@ -28,7 +28,7 @@ require (
 	go.opencensus.io v0.24.0
 	go.uber.org/zap v1.27.1
 	golang.org/x/exp v0.0.0-20260112195511-716be5621a96
-	golang.org/x/mod v0.34.0
+	golang.org/x/mod v0.35.0
 	golang.org/x/sync v0.20.0
 	gomodules.xyz/jsonpatch/v2 v2.5.0
 	gopkg.in/yaml.v3 v3.0.1
@@ -46,6 +46,7 @@ require (
 replace (
 	github.com/alibabacloud-go/cr-20160607 => github.com/vdemeester/cr-20160607 v1.0.1
 	github.com/go-jose/go-jose/v4 => github.com/go-jose/go-jose/v4 v4.1.4
+	github.com/openshift-pipelines/pipelines-as-code => github.com/tektoncd/pipelines-as-code v0.42.0
 	k8s.io/api => k8s.io/api v0.32.4
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.32.9
 	k8s.io/apimachinery => k8s.io/apimachinery v0.32.4
